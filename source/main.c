@@ -14,10 +14,8 @@
 
 #include "reimpl/controls.h"
 #include "reimpl/audio.h"
-#include "reimpl/intro_video.h"
-
-extern void port_trace(const char *format, ...);
-extern void port_trace_flush(void);
+#include "video.h"
+#include "utils/logger.h"
 
 int _newlib_heap_size_user = 256 * 1024 * 1024;
 
@@ -85,7 +83,7 @@ static uintptr_t required_symbol(const char *name) {
 
 static void write_raw_boot_marker(void) {
     static const char marker[] =
-        "Modern Combat 2 Vita diagnostic v24 reached main()\n";
+        "Modern Combat 2 Vita diagnostic v26 reached main()\n";
     SceUID fd = sceIoOpen("ux0:data/mc2_boot.log",
                           SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0666);
     if (fd >= 0) {
@@ -100,7 +98,7 @@ static void trace_data_preflight(void) {
         DATA_PATH "GloftBPHP/data/3d.header",
         DATA_PATH "GloftBPHP/data/3d.pak",
         DATA_PATH "GloftBPHP/data/2d.header",
-        DATA_PATH "GloftBPHP/data/intro/logo-vita.mp4",
+        DATA_PATH "GloftBPHP/data/intro/logo.mp4",
     };
 
     for (unsigned index = 0;
@@ -227,19 +225,21 @@ static void bootstrap_game(void) {
     jstring build = jni->NewStringUTF(&jni, "GL_00");
     jstring device = jni->NewStringUTF(&jni, "sony ericsson_R800i");
     jstring android_release = jni->NewStringUTF(&jni, "2.3.4");
-    jstring version = jni->NewStringUTF(&jni, "1.0.0");
+    /* 1.0.0 is the Xperia Play build (exports m_isSlideUp, profile 4, ATC
+     * data).  1.0.5 is the generic touch build: GameRenderer.onSurfaceCreated
+     * passes profile 2 and the data ships PVRTC textures. */
+    int xperia_build = engine_slide_up != NULL;
+    int profile = xperia_build ? MC2_TEXTURE_PROFILE : 2;
+    jstring version = jni->NewStringUTF(&jni, xperia_build ? "1.0.0" : "1.0.5");
 
     port_trace("main: calling Game.nativeGetInfo");
     native_get_info(&jni, game_object, country, build, device,
                     android_release);
     port_trace("main: Game.nativeGetInfo returned");
 
-    /* The supplied data set targets the Xperia Play R800 profile.  The Java
-     * original returns manufacturer profile 4 for Sony devices, followed by
-     * the surface width, height and package version. */
-    port_trace("main: calling GameRenderer.nativeInit profile=%d 960x544",
-               MC2_TEXTURE_PROFILE);
-    renderer_init(&jni, game_object, MC2_TEXTURE_PROFILE, 960, 544, version);
+    port_trace("main: calling GameRenderer.nativeInit profile=%d 960x544 "
+               "build=%s", profile, xperia_build ? "1.0.0-xperia" : "1.0.5-touch");
+    renderer_init(&jni, game_object, profile, 960, 544, version);
     port_trace("main: GameRenderer.nativeInit returned");
 
     port_trace("main: calling GLMediaPlayer.nativeInit mode=0");
@@ -262,12 +262,12 @@ static void bootstrap_game(void) {
 }
 
 int main(void) {
+    log_init();
     sceAppUtilInit(&(SceAppUtilInitParam){}, &(SceAppUtilBootParam){});
     write_raw_boot_marker();
     sceIoMkdir(DATA_PATH "files", 0777);
-    sceIoRemove(DATA_PATH "port.log");
-    port_trace("Modern Combat 2 Vita port trace v24 "
-               "(fixed AVPlayer handle lifetime, H264 intro and audio guard)");
+    l_info("Modern Combat 2 Vita loader starting (log: %s)", log_current_path());
+    port_trace("Modern Combat 2 Vita port trace v26 (FFmpeg intro, buffered log, 1.0.5 support, online UI hidden)");
     port_trace("main: process entered, DATA_PATH=%s", DATA_PATH);
     trace_data_preflight();
 
@@ -280,7 +280,9 @@ int main(void) {
     gl_init();
     port_trace("main: VitaGL initialized");
     port_trace_flush();
-    mc2_play_intro_video();
+    video_init();
+    video_play("GloftBPHP/data/intro/logo.mp4");
+    video_shutdown();
     bootstrap_game();
     port_trace_flush();
 
@@ -288,6 +290,7 @@ int main(void) {
     const unsigned stats_interval = 600;
     port_trace("main: entering 60 FPS renderer loop target_us=%llu",
                (unsigned long long)target_frame_us);
+    port_trace_flush();
     unsigned frame = 0;
     unsigned missed_frames = 0;
     uint64_t stats_started = sceKernelGetProcessTimeWide();
@@ -295,11 +298,27 @@ int main(void) {
     uint64_t render_max = 0;
     while (1) {
         uint64_t start = sceKernelGetProcessTimeWide();
+        if (frame < 16) {
+            port_trace("FRAME %u: controls_poll enter", frame + 1);
+            port_trace_flush();
+        }
         controls_poll();
         int rendered_touch = prepare_input_mode_for_render();
+        if (frame < 16) {
+            port_trace("FRAME %u: renderer_native_render enter", frame + 1);
+            port_trace_flush();
+        }
         renderer_native_render(&jni, game_object);
         finish_input_mode_after_render(rendered_touch);
+        if (frame < 16) {
+            port_trace("FRAME %u: gl_swap enter", frame + 1);
+            port_trace_flush();
+        }
         gl_swap();
+        if (frame < 16) {
+            port_trace("FRAME %u: completed", frame + 1);
+            port_trace_flush();
+        }
 
         uint64_t render_elapsed = sceKernelGetProcessTimeWide() - start;
         render_total += render_elapsed;
@@ -308,8 +327,10 @@ int main(void) {
         if (render_elapsed > target_frame_us)
             ++missed_frames;
 
-        if (++frame <= 8)
+        if (++frame <= 8) {
             port_trace("main: rendered frame=%u", frame);
+            port_trace_flush();
+        }
 
         if (render_elapsed < target_frame_us)
             sceKernelDelayThread((unsigned)(target_frame_us - render_elapsed));
@@ -438,11 +459,46 @@ static void update_analog_key(int *current, int next) {
         game_native_key_down(&jni, game_object, *current);
 }
 
+/* 1.0.5 ignores key-down events (appOnKeyDown is an empty stub), so the left
+ * stick drives the on-screen movement thumbstick through the same
+ * TouchScreenBase path the right stick uses for the camera.
+ * ponytail: anchor/radius are the default HUD1 bottom-left stick estimate;
+ * if movement does not respond, tap the stick on the Vita screen and copy the
+ * "INPUT: application touch ... x= y=" values from the log here. */
+#define MOVE_STICK_X 150.0f
+#define MOVE_STICK_Y 400.0f
+#define MOVE_STICK_RADIUS 70.0f
+
+static void move_stick_touch(float x, float y, ControlsAction action) {
+    static int active;
+    if (!touchscreen_touch_began || !engine_application ||
+        !*engine_application)
+        return;
+    float px = MOVE_STICK_X + x * MOVE_STICK_RADIUS;
+    float py = MOVE_STICK_Y + y * MOVE_STICK_RADIUS;
+    if (action == CONTROLS_ACTION_DOWN && !active) {
+        active = 1;
+        dispatch_camera_touch(2, MOVE_STICK_X, MOVE_STICK_Y,
+                              CONTROLS_ACTION_DOWN);
+        dispatch_camera_touch(2, px, py, CONTROLS_ACTION_MOVE);
+    } else if (action == CONTROLS_ACTION_UP && active) {
+        active = 0;
+        dispatch_camera_touch(2, MOVE_STICK_X, MOVE_STICK_Y,
+                              CONTROLS_ACTION_UP);
+    } else if (action == CONTROLS_ACTION_MOVE && active) {
+        dispatch_camera_touch(2, px, py, CONTROLS_ACTION_MOVE);
+    }
+}
+
 void controls_handler_analog(ControlsStickId which, float x, float y,
                              ControlsAction action) {
     if (!game_native_key_down || !game_native_key_up)
         return;
 
+    if (which == CONTROLS_STICK_LEFT && !engine_slide_up) {
+        move_stick_touch(x, y, action);
+        return;
+    }
     if (which == CONTROLS_STICK_LEFT) {
         int horizontal = x < -0.35f ? AKEYCODE_DPAD_LEFT :
                          x > 0.35f ? AKEYCODE_DPAD_RIGHT : 0;

@@ -224,8 +224,17 @@ void glCompressedTexImage2D_soloader(GLenum target, GLint level,
     if (internal_format != GL_ATC_RGB_AMD &&
         internal_format != GL_ATC_RGBA_EXPLICIT_ALPHA_AMD &&
         internal_format != GL_ATC_RGBA_INTERPOLATED_ALPHA_AMD) {
+        static unsigned native_traces;
+        if (level == 0 && native_traces++ < 24)
+            port_trace("GL: native compressed format=0x%x %dx%d bytes=%d",
+                       internal_format, width, height, image_size);
         glCompressedTexImage2D(target, level, internal_format, width, height,
                                border, image_size, data);
+        GLenum error = glGetError();
+        if (error != GL_NO_ERROR)
+            port_trace("GL: compressed upload rejected format=0x%x level=%d "
+                       "%dx%d error=0x%x", internal_format, level, width,
+                       height, error);
         return;
     }
 
@@ -726,63 +735,36 @@ void gl_preload() {
 }
 
 void gl_init() {
-    /* Purple compiles its own splash shaders immediately after EGL setup.
-     * Let VitaGL's asynchronous splash/initialization worker finish first;
-     * ShaccCg is not safe when two startup paths enter it concurrently. */
-    vglInitExtended(0, 960, 544, 6 * 1024 * 1024,
-                    SCE_GXM_MULTISAMPLE_NONE);
-    port_trace("GL: VitaGL init returned; waiting for startup worker");
-    sceKernelDelayThread(4000 * 1000);
-    port_trace("GL: startup serialization delay completed");
+    static unsigned char vgl_initialized = 0;
+    if (vgl_initialized) {
+        return;
+    }
+    vgl_initialized = 1;
+
+    vglSetupRenderTargetScenesNum(8, 8);
+    sceIoMkdir(DATA_PATH "shader_cache", 0777);
+    sceIoMkdir(DATA_PATH "shader_cache/v", 0777);
+    sceIoMkdir(DATA_PATH "shader_cache/f", 0777);
+    vglSetShaderCachePath(DATA_PATH "shader_cache");
+    vglUseCachedMem(GL_TRUE);
+
+    GLboolean clamped = vglInitWithCustomThreshold(0, 960, 544, 12 * 1024 * 1024,
+                                                   0, 0x7FFFFFFF,
+                                                   0x8C6000,
+                                                   SCE_GXM_MULTISAMPLE_NONE);
+    port_trace("GL: VitaGL initialized (960x544, 12MB vertex pool, 8 scenes, shader cache%s)",
+               clamped ? ", resolution clamped" : "");
 }
 
 void gl_swap() {
     vglSwapBuffers(GL_FALSE);
 }
 
-/* Purple queries the GL identity immediately after eglMakeCurrent.  The v6
- * core stopped in that transition before the engine could draw its splash.
- * Return immutable GLES2 capability strings without entering VitaGL's
- * information path during its own splashscreen/GC startup. */
 const GLubyte *glGetString_soloader(GLenum name) {
-    const char *value;
-    switch (name) {
-        case GL_VENDOR:
-            value = "VitaGL";
-            break;
-        case GL_RENDERER:
-            value = "PowerVR SGX 543MP4+ (VitaGL)";
-            break;
-        case GL_VERSION:
-            value = "OpenGL ES 2.0 VitaGL";
-            break;
-        case GL_SHADING_LANGUAGE_VERSION:
-            value = "OpenGL ES GLSL ES 1.00";
-            break;
-        case GL_EXTENSIONS:
-            value =
-                "GL_AMD_compressed_ATC_texture "
-                "GL_OES_compressed_ETC1_RGB8_texture "
-                "GL_IMG_texture_compression_pvrtc "
-                "GL_OES_depth24 "
-                "GL_OES_depth_texture "
-                "GL_OES_element_index_uint "
-                "GL_OES_framebuffer_object "
-                "GL_OES_mapbuffer "
-                "GL_OES_packed_depth_stencil "
-                "GL_OES_rgb8_rgba8 "
-                "GL_OES_standard_derivatives "
-                "GL_EXT_blend_minmax "
-                "GL_EXT_blend_subtract "
-                "GL_EXT_discard_framebuffer "
-                "GL_EXT_texture_filter_anisotropic";
-            break;
-        default:
-            value = "";
-            break;
-    }
-    port_trace("GL: glGetString name=0x%x -> %.48s", name, value);
-    return (const GLubyte *)value;
+    const GLubyte *value = glGetString(name);
+    port_trace("GL: glGetString name=0x%x -> %.48s", name,
+               value ? (const char *)value : "(null)");
+    return value;
 }
 
 void glShaderSource_soloader(GLuint shader, GLsizei count,
@@ -915,9 +897,11 @@ void glCompileShader_soloader(GLuint shader) {
         port_trace("GL: glCompileShader #%u native compile returned", call);
 #ifdef DUMP_COMPILED_SHADERS
         void *bin = vglMalloc(32 * 1024);
-        GLsizei len;
+        GLsizei len = 0;
         vglGetShaderBinary(shader, 32 * 1024, &len, bin);
-        file_save(next_shader_fname, bin, len);
+        if (len > 0) {
+            file_save(next_shader_fname, bin, len);
+        }
         vglFree(bin);
 #endif
     }

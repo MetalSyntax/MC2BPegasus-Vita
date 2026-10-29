@@ -8,7 +8,10 @@ Unofficial wrapper/port of **Modern Combat 2: Black Pegasus** for PlayStation Vi
 
 The port operates by loading the official Android ARMv7 executable directly into memory, linking its dependencies to native functions, providing the JNI environment expected by the game, and translating OpenGL ES calls through vitaGL. In practice, this creates a lightweight Android-like environment where the original executable can run natively on the PS Vita.
 
-> Port by **MeninoSung**
+> Port by **MeninoSung** · Community fork maintained by **Wonder Diaz**
+
+> [!NOTE]
+> **About this fork.** The original repository ([WolffsRoom/MC2BPegasus-Vita](https://github.com/WolffsRoom/MC2BPegasus-Vita)) has had no activity for months, so this fork continues the work: FFmpeg playback of the original intro movie, faster boot, Android **1.0.5** support, reworked controls and a menu without the dead online services. Every change is listed in [RELEASE.md](RELEASE.md). All credit for the original port stays with its author.
 
 ## About the port
 
@@ -34,25 +37,24 @@ ur0:tai/fd_fix.skprx
 
 - **Optional:** Install [PSVshell](https://github.com/Electry/PSVshell/releases/) if you want to monitor performance. Overclocking is not required: the port runs at a stable 60 FPS at the PS Vita's standard 333 MHz CPU clock.
 - Install `libshacccg.suprx`, if you do not already have it, by following [this guide](https://samilops2.gitbook.io/vita-troubleshooting-guide/shader-compiler/extract-libshacccg.suprx).
-- Obtain a legal copy of **Modern Combat 2: Black Pegasus version 1.0.0** for Android ARMv7.
+- Obtain a legal copy of **Modern Combat 2: Black Pegasus** for Android ARMv7, version **1.0.0** or **1.0.5**.
 - Do not combine `libsandstorm2.so` and data files from different releases.
 
-### Supported Android Build
+### Supported Android Builds
 
-| Property | Value |
-|---|---|
-| Game | Modern Combat 2: Black Pegasus |
-| Version | 1.0.0 |
-| Architecture | ARMv7 |
-| Native library | `libsandstorm2.so` |
-| Package namespace | `com.gameloft.android.GAND.GloftBPHP.ML` |
-| Data profile | Xperia Play / `GloftBPHP` |
+| Property | 1.0.0 (Xperia Play) | 1.0.5 (generic touch) |
+|---|---|---|
+| Native library | `libsandstorm2.so` (6.4 MB) | `libsandstorm2.so` (7.9 MB) |
+| Package namespace | `com.gameloft.android.GAND.GloftBPHP.ML` | same |
+| Render profile sent to the engine | 4 (Sony) | 2 (generic) |
+| Texture format in `3d.pak` | ATC (decoded to RGBA8 by the loader) | PVRTC 2bpp (native on the Vita GPU) |
+| Physical buttons | Native (Xperia Play key path) | Engine ignores key presses; sticks are mapped to touch (see Controls) |
 
-_Only data extracted from version 1.0.0 is supported. Files from other versions may use incompatible native code, resources, or data layouts._
+The loader detects the build at startup (the 1.0.0 Xperia library exports `m_isSlideUp`, 1.0.5 does not) and picks the profile and version string automatically. Only `libStormGLOFT.so` from the 1.0.5 APK is not needed.
 
 ### How to Prepare the Game Files
 
-1. Extract your legally obtained Android game package and game data for version **1.0.0**.
+1. Extract your legally obtained Android game package and game data (1.0.0 **or** 1.0.5).
 2. Locate `libsandstorm2.so` in the APK's ARMv7 library folder.
 3. Locate the matching `GloftBPHP/data` directory.
 4. Create a folder named `moderncombat2` with the following structure:
@@ -81,7 +83,8 @@ _Only data extracted from version 1.0.0 is supported. Files from other versions 
                `-- logo.mp4
    ```
 
-5. Keep all files from the same version 1.0.0 release together. Do not replace individual files with data from another version.
+5. Keep all files from the same release together. Do not replace individual files with data from another version.
+6. Keep `intro/logo.mp4` exactly as it ships. The port decodes the original MPEG-4 Part 2 + AAC movie in software with FFmpeg; no conversion or `logo-vita.mp4` is needed anymore.
 
 ### Installation on PS Vita
 
@@ -96,7 +99,7 @@ _Only data extracted from version 1.0.0 is supported. Files from other versions 
 
 4. Launch **PegasusVita** from the LiveArea.
 
-If startup fails, check `ux0:data/moderncombat2/port.log`. The loader also creates `ux0:data/mc2_boot.log` when the application reaches its main entry point.
+If startup fails, check the newest `ux0:data/moderncombat2/logs/port_NNNN.log` (one file per launch). The loader also creates `ux0:data/mc2_boot.log` when the application reaches its main entry point.
 
 ### Language
 
@@ -117,30 +120,23 @@ Options > Languages > English
 
 ## Controls
 
-The port supports the front touchscreen, both analog sticks, and the physical PS Vita controls. The physical buttons are exposed to the game using its original Xperia Play mappings.
+The port supports the front touchscreen, both analog sticks, and the physical PS Vita controls. On 1.0.0 the physical buttons reach the game through its original Xperia Play key path. **Circle no longer opens the pause menu**; START is now pause / back.
 
-<div align="center">
-  <table>
-    <thead>
-      <tr>
-        <th align="center">Control</th>
-        <th align="center">Action</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr><td align="center">Left analog stick</td><td align="center">Movement</td></tr>
-      <tr><td align="center">Right analog stick</td><td align="center">Camera / aiming</td></tr>
-      <tr><td align="center">D-pad</td><td align="center">Android D-pad directions</td></tr>
-      <tr><td align="center">Cross</td><td align="center">D-pad center / confirm</td></tr>
-      <tr><td align="center">Circle</td><td align="center">Back</td></tr>
-      <tr><td align="center">Square</td><td align="center">Xperia Play X button</td></tr>
-      <tr><td align="center">Triangle</td><td align="center">Xperia Play Y button</td></tr>
-      <tr><td align="center">L / R</td><td align="center">Xperia Play L1 / R1</td></tr>
-      <tr><td align="center">START / SELECT</td><td align="center">Start / Select</td></tr>
-      <tr><td align="center">Front touchscreen</td><td align="center">Menus, touch controls, and on-screen interactions</td></tr>
-    </tbody>
-  </table>
-</div>
+| PS Vita control | Sent to the game as | 1.0.0 (Xperia Play build) | 1.0.5 (touch build) |
+|---|---|---|---|
+| Left analog stick | D-pad keys (1.0.0) / touch drag on the movement stick (1.0.5) | Move | Move (touch emulation) |
+| Right analog stick | Touch drag on the right half of the screen | Look / aim | Look / aim |
+| D-pad | `DPAD_UP/DOWN/LEFT/RIGHT` | Move / menu navigation | — (engine ignores keys) |
+| Cross | `DPAD_CENTER` | Confirm / Xperia action | — |
+| Circle | _unbound_ | Free (no longer opens the menu) | Free |
+| Square | `BUTTON_X` | Xperia Play X action | — |
+| Triangle | `BUTTON_Y` | Xperia Play Y action | — |
+| L | `BUTTON_L1` | Xperia Play L1 | — |
+| R | `BUTTON_R1` | Xperia Play R1 | — |
+| START | `BACK` | Pause / back in menus | Pause / back in menus |
+| SELECT | `BUTTON_SELECT` | Xperia Play Select | — |
+| Front touchscreen | Touch events | Menus and on-screen controls | Full HUD (fire, grenade, reload, crouch, pause…) |
+| Cross / START during the intro | — | Skip intro movie | Skip intro movie |
 
 _The exact in-game action of each Xperia Play button can vary by screen and control configuration._
 
@@ -162,7 +158,8 @@ Requirements:
 
 - [VitaSDK](https://vitasdk.org/) configured through the `VITASDK` environment variable;
 - an ARM `softfp` toolchain and compatible dependencies;
-- vitaGL, vitashark, FalsoJNI, OpenSLES, and the audio libraries referenced by `CMakeLists.txt`;
+- vitaGL (built from `lib/vitagl` with the flags in `CMakeLists.txt`), vitashark, FalsoJNI, OpenSLES, and the audio libraries referenced by `CMakeLists.txt`;
+- FFmpeg for the intro movie: `vdpm ffmpeg` and `vdpm lame` once;
 - `kubridge.skprx` installed on the target Vita.
 
 ### Compile
@@ -181,6 +178,8 @@ cmake -S . -B build \
 cmake --build build
 ```
 
+Leave `DUMP_COMPILED_SHADERS` **OFF** (the default). vitaGL already caches compiled shaders in `ux0:data/moderncombat2/shader_cache/`, and the dump path overflowed its fixed 32 KB buffer on the first shader (Data Abort in `serialize_shader`).
+
 Debug builds enable additional loader diagnostics:
 
 ```bash
@@ -191,9 +190,9 @@ cmake --build build-debug
 ## Known Issues
 
 - Touch input still has some interaction bugs caused by conflicts with the virtual movement joystick.
-- Some textures, including weapons lying on the ground, are missing.
-- Files from Android releases other than version 1.0.0 are not supported.
-- Network services, purchases, and integrations tied to discontinued Android or Gameloft infrastructure are not supported.
+- Weapons lying on the ground can render white with 1.0.0 (ATC) data. 1.0.5 data uses PVRTC, which the Vita GPU decodes natively; the loader now logs every compressed format and any rejected upload (`GL: native compressed…` / `GL: compressed upload rejected…`) so the remaining cases can be pinned down. Not yet confirmed on hardware.
+- On 1.0.5 the engine discards physical key presses (`appOnKeyDown` is an empty stub in that build). START (pause/back) and both sticks work; fire, reload, grenade and the other actions use the touchscreen. The left-stick touch anchor (`MOVE_STICK_X/Y` in `source/main.c`) may need calibration on hardware.
+- Online services (Gameloft LIVE!, More Games, Twitter, multiplayer) no longer exist. Their main-menu buttons are drawn at opacity 0 but their area can still be tapped.
 
 ## Legal Notice
 

@@ -151,12 +151,13 @@ static ButtonMapping mapping[] = {
         { SCE_CTRL_RIGHT,     AKEYCODE_DPAD_RIGHT },
         /* The target APK uses the pre-API-12 Xperia Play convention. */
         { SCE_CTRL_CROSS,     AKEYCODE_DPAD_CENTER },
-        { SCE_CTRL_CIRCLE,    AKEYCODE_BACK },
+        /* Circle is deliberately unbound: as BACK it opened the pause menu
+         * in the middle of a fight.  START now owns pause / menu back. */
         { SCE_CTRL_SQUARE,    AKEYCODE_BUTTON_X },
         { SCE_CTRL_TRIANGLE,  AKEYCODE_BUTTON_Y },
         { SCE_CTRL_L1,        AKEYCODE_BUTTON_L1 },
         { SCE_CTRL_R1,        AKEYCODE_BUTTON_R1 },
-        { SCE_CTRL_START,     AKEYCODE_BUTTON_START },
+        { SCE_CTRL_START,     AKEYCODE_BACK },
         { SCE_CTRL_SELECT,    AKEYCODE_BUTTON_SELECT },
 };
 

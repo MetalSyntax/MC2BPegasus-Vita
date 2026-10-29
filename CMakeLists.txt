@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "Minimum policy version")
 
 if (NOT DEFINED ENV{VITASDK} AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
   message(FATAL_ERROR "Please define VITASDK env var to point to your SDK path or set CMAKE_TOOLCHAIN_FILE.")
@@ -14,7 +15,7 @@ include("${VITASDK}/share/vita.cmake" REQUIRED)
 set(VITA_APP_NAME "PegasusVita")
 set(VITA_TITLEID "MC2V00001")
 set(VITA_VPKNAME "Pegasus_Vita")
-set(VITA_VERSION "01.24")
+set(VITA_VERSION "01.25")
 set(VITA_MKSFOEX_FLAGS "-d ATTRIBUTE2=12")
 
 # Optional: used for "send" and "dump" targets
@@ -70,13 +71,14 @@ add_definitions(-D_GNU_SOURCE -D__POSIX_VISIBLE=999999)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wl,-q -mfloat-abi=softfp -std=gnu11 -Wno-deprecated")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wl,-q -mfloat-abi=softfp -std=gnu++20 -Wno-write-strings -Wno-psabi")
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -mfloat-abi=softfp -Wl,--no-warn-mismatch")
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O1 -g3")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O1 -g3")
 else ()
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -g0 -ffast-math")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -g0 -ffast-math")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -g -ffast-math")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -g -ffast-math")
 endif()
 
 add_executable(${CMAKE_PROJECT_NAME}
@@ -87,8 +89,6 @@ add_executable(${CMAKE_PROJECT_NAME}
                source/reimpl/bits/_ctype.c
                source/reimpl/audio.c
                source/reimpl/audio.h
-               source/reimpl/intro_video.c
-               source/reimpl/intro_video.h
                source/reimpl/controls.c
                source/reimpl/controls.h
                source/reimpl/egl.c
@@ -102,6 +102,7 @@ add_executable(${CMAKE_PROJECT_NAME}
                source/reimpl/sys.c
                source/reimpl/time64.c
                source/reimpl/asset_manager.cpp
+               source/video.cpp
                source/utils/dialog.c
                source/utils/glutil.c
                source/utils/init.c
@@ -126,7 +127,21 @@ add_subdirectory("${LIBC_BRIDGE_SOURCE_DIR}"
                  "${CMAKE_CURRENT_BINARY_DIR}/lib/libc_bridge")
 add_dependencies(${CMAKE_PROJECT_NAME} SceLibcBridge)
 
+set(VITAGL_MAKE_FLAGS_STR "SOFTFP_ABI=1 NO_DEBUG=1 LOG_ERRORS=1 HAVE_SHADER_CACHE=1 NO_SPLASHSCREEN=1 DRAW_SPEEDHACK=2 HAVE_GLSL_UBOS=1 SAMPLERS_SPEEDHACK=1 MATH_SPEEDHACK=1 CIRCULAR_POOL_SPEEDHACK=1 NO_TEX_COMBINER=1")
+message(STATUS "vitaGL flags: ${VITAGL_MAKE_FLAGS_STR}")
+separate_arguments(VITAGL_MAKE_FLAGS UNIX_COMMAND "${VITAGL_MAKE_FLAGS_STR}")
+set(VITAGL_STAMP "${CMAKE_BINARY_DIR}/vitagl.stamp")
+
+add_custom_target(vitaGL_lib
+  COMMAND bash "${CMAKE_SOURCE_DIR}/lib/vitagl/build_vitagl.sh" "${VITAGL_MAKE_FLAGS_STR}" "${VITAGL_STAMP}" "${CMAKE_SOURCE_DIR}/lib/vitagl"
+  COMMAND make -C "${CMAKE_SOURCE_DIR}/lib/vitagl" -j4 ${VITAGL_MAKE_FLAGS}
+  BYPRODUCTS "${CMAKE_SOURCE_DIR}/lib/vitagl/libvitaGL.a"
+  COMMENT "Building vitaGL with custom flags..."
+)
+add_dependencies(${CMAKE_PROJECT_NAME} vitaGL_lib)
+
 target_include_directories(${CMAKE_PROJECT_NAME} SYSTEM
+                           PUBLIC ${CMAKE_SOURCE_DIR}/lib/vitagl/source
                            PUBLIC ${CMAKE_SOURCE_DIR}/lib
                            )
 
@@ -138,6 +153,10 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
                       -Wl,--whole-archive pthread -Wl,--no-whole-archive
                       OpenSLES
                       sndfile
+                      avformat
+                      avcodec
+                      swresample
+                      avutil
                       mp3lame
                       mpg123
                       opus
@@ -147,7 +166,7 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
                       vorbisfile
                       FLAC
                       stdc++
-                      vitaGL
+                      ${CMAKE_SOURCE_DIR}/lib/vitagl/libvitaGL.a
                       vitashark
                       SceShaccCgExt
                       taihen_stub
@@ -165,7 +184,6 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
                       SceAppUtil_stub
                       SceAudio_stub
                       SceAudioIn_stub
-                      SceAvPlayer_stub
                       SceCommonDialog_stub
                       SceDisplay_stub
                       SceKernelDmacMgr_stub

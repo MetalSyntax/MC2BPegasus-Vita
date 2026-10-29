@@ -8,3 +8,15 @@ data/
 prepared-data/
 MC2BPegasus-Vita.vpk
 README_MC2_VITA.md
+ux0_data
+decompiled
+moderncombat2_extract
+logs
+*.zip
+*.apk
+*.ipa
+*.so
+lib/vitagl/samples/
+lib/vitagl/*.a
+*.bak
+._*
