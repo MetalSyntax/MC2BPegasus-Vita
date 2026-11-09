@@ -200,6 +200,27 @@ This is an unofficial, free, non-commercial port. **Modern Combat 2: Black Pegas
 
 This repository must not be used to distribute commercial APKs, native libraries, or game data. Use only files from a copy you obtained legally and support the original developers.
 
+## ☕ Support My Work
+
+This project is **free** and will stay free. If you enjoy it, a tip from **$1** helps me keep porting games to the PS Vita:
+
+<p align="center">
+  <a href="https://ko-fi.com/metalsyntax"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support me on Ko-fi"></a>
+</p>
+
+- **Ko-fi:** [ko-fi.com/metalsyntax](https://ko-fi.com/metalsyntax)
+- **PayPal:** [paypal.me/MetalSyntax](https://paypal.me/MetalSyntax)
+- **Bitcoin (BTC):** `133HdCsaWxdjTfmwpgGVykByhNBV338uRc`
+
+**Ko-fi supporters get:**
+- **Early access** to new ports before their public release (test builds of upcoming projects).
+- **Data preparation scripts and step-by-step guides** to set up your own game files for each new port.
+- A say in which games I port next.
+
+> Game files are never distributed. You always need your own legally obtained copy of the game.
+
+---
+
 ## Credits
 
 The loader code is derived from work by Volodymyr Atamanenko and the wider PS Vita Android-porting community. FalsoJNI is distributed in `lib/falso_jni` under its own license. Rights to Modern Combat 2 and its assets belong to their respective owners.
